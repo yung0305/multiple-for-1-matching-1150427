@@ -26,10 +26,10 @@
     }
     
     @keyframes wrong-shake {
-      0%, 100% { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
-      25% { transform: translate(-50%, -50%) translateX(-15px) rotate(-15deg) scale(1.1); }
-      50% { transform: translate(-50%, -50%) translateX(15px) rotate(15deg) scale(1.1); }
-      75% { transform: translate(-50%, -50%) translateX(-15px) rotate(-15deg) scale(1.1); }
+      0%, 100% { transform: translateX(0) rotate(0deg) scale(1); }
+      25% { transform: translateX(-15px) rotate(-15deg) scale(1.1); }
+      50% { transform: translateX(15px) rotate(15deg) scale(1.1); }
+      75% { transform: translateX(-15px) rotate(-15deg) scale(1.1); }
     }
     
     .float-animation { animation: float 3s ease-in-out infinite; }
@@ -87,7 +87,7 @@
     </div>
     
     <div id="question-area" class="w-full max-w-4xl">
-     <div id="question-card" class="bg-white rounded-3xl p-6 shadow-lg border-4 border-pink-200 mb-6 max-w-2xl mx-auto">
+     <div id="question-card" class="bg-white rounded-3xl p-6 shadow-lg border-4 border-pink-200 mb-6 max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[120px]">
       <p id="question-text" class="text-xl md:text-2xl text-center text-gray-700 font-medium whitespace-pre-line">點擊下方開始遊戲！</p>
      </div>
      
@@ -129,6 +129,13 @@
           <option value="4">四選一 (4個選項)</option>
          </select>
         </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-600 mb-1">語音朗讀功能 (TTS)</label>
+         <select id="setting-enable-tts" class="w-full px-3 py-2 border-2 border-pink-200 rounded-lg focus:border-pink-400 focus:outline-none text-sm">
+          <option value="true">開啟 (自動與點擊朗讀題目)</option>
+          <option value="false">關閉</option>
+         </select>
+        </div>
        </div>
       </div>
 
@@ -156,7 +163,7 @@
       <div class="bg-white rounded-2xl p-4 mb-6 border-2 border-pink-200 shadow-sm">
        <h3 class="font-bold text-pink-600 mb-3">➕ 新增配對項目</h3>
        <form id="add-form" onsubmit="addPairItem(event)" class="space-y-3">
-        <div><label class="block text-sm font-medium text-gray-600 mb-1">標籤文字</label> <input type="text" id="new-label" placeholder="例：花" required class="w-full px-3 py-2 border-2 border-pink-200 rounded-lg focus:border-pink-400 focus:outline-none">
+        <div><label class="block text-sm font-medium text-gray-600 mb-1">標籤文字 (語音會唸出此文字)</label> <input type="text" id="new-label" placeholder="例：花" required class="w-full px-3 py-2 border-2 border-pink-200 rounded-lg focus:border-pink-400 focus:outline-none">
         </div>
         <div><label class="block text-sm font-medium text-gray-600 mb-1">配對圖片（JPG/PNG）</label> <input type="file" id="new-image" accept=".jpg,.jpeg,.png" onchange="previewImage(event, 'preview-img')" required class="w-full px-3 py-2 border-2 border-pink-200 rounded-lg text-sm">
          <div id="preview-img" class="mt-2 max-w-20 max-h-20"></div>
@@ -189,8 +196,6 @@
     // 預設的 GitHub (遠端) 設定檔清單
     const PRESET_CLOUD_CONFIGS = [
         { filename: 'APP圖檔.json', label: '📦 APP圖檔預設資料庫' }
-        // 您可以隨時在這裡新增更多雲端 JSON 設定檔，例如：
-        // { filename: 'fruit_data.json', label: '🍎 水果圖檔' }
     ];
 
     // 讀取資料與設定
@@ -200,8 +205,15 @@
     // 遊戲全域設定
     let gameSettings = JSON.parse(localStorage.getItem('gameSettings')) || {
       title: "🌸 2選1配對遊戲 🌸",
-      optionCount: 2
+      optionCount: 2,
+      enableTTS: true
     };
+    
+    // 確保舊玩家的存檔也會有 enableTTS 設定
+    if (gameSettings.enableTTS === undefined) {
+      gameSettings.enableTTS = true;
+    }
+    
     let tempGameSettings = { ...gameSettings };
 
     let generatedQuestions = [];
@@ -210,6 +222,12 @@
     let gameStarted = false;
     let deleteConfirmId = null;
 
+    // 音效設定
+    const correctSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3'); // 叮咚聲
+    const wrongSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2955/2955-preview.mp3'); // 叭噗/錯誤聲
+    correctSound.volume = 0.5;
+    wrongSound.volume = 0.5;
+
     // 定義選項的配色與樣式
     const optionStyles = [
         "from-pink-100 to-pink-200 border-pink-300 hover:border-pink-400",
@@ -217,6 +235,28 @@
         "from-green-100 to-green-200 border-green-300 hover:border-green-400",
         "from-purple-100 to-purple-200 border-purple-300 hover:border-purple-400"
     ];
+
+    // --- 語音朗讀 (TTS) 功能 ---
+    function speakText(text) {
+      if (!gameSettings.enableTTS) return;
+      
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // 停止目前正在播放的語音
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'zh-TW'; // 設定為台灣中文
+        utterance.rate = 0.85;    // 稍微調慢語速，適合特教生聽讀
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    function speakCurrentQuestion() {
+      if (!gameStarted) return;
+      const q = generatedQuestions[currentQuestionIndex];
+      if (q && q.label) {
+        speakText(q.label);
+      }
+    }
+    // -------------------------
 
     // 初始化雲端下拉選單
     function initCloudOptions() {
@@ -293,6 +333,7 @@
       // 更新介面
       document.getElementById('setting-title').value = tempGameSettings.title;
       document.getElementById('setting-options-count').value = tempGameSettings.optionCount;
+      document.getElementById('setting-enable-tts').value = tempGameSettings.enableTTS !== false ? "true" : "false";
       
       renderItemList();
       document.getElementById('admin-panel').classList.remove('hidden');
@@ -310,6 +351,7 @@
       // 儲存設定
       gameSettings.title = document.getElementById('setting-title').value || "🌸 配對遊戲 🌸";
       gameSettings.optionCount = parseInt(document.getElementById('setting-options-count').value) || 2;
+      gameSettings.enableTTS = document.getElementById('setting-enable-tts').value === "true";
       
       localStorage.setItem('pairItems', JSON.stringify(pairItems));
       localStorage.setItem('gameSettings', JSON.stringify(gameSettings));
@@ -615,8 +657,8 @@
         const btn = document.createElement('button');
         btn.id = `option-${i}`;
         
-        // 基本與動態樣式
-        btn.className = `option-card bg-gradient-to-br rounded-2xl p-4 border-4 shadow-md flex flex-col items-center justify-center min-h-32 md:min-h-48 ${optionStyles[i % optionStyles.length]}`;
+        // 基本與動態樣式 (加上 relative 以便定位X)
+        btn.className = `option-card relative bg-gradient-to-br rounded-2xl p-4 border-4 shadow-md flex flex-col items-center justify-center min-h-32 md:min-h-48 ${optionStyles[i % optionStyles.length]}`;
         
         if (mode === 'menu') {
           btn.innerHTML = `<span class="text-5xl">${emojis[i % emojis.length]}</span>`;
@@ -677,12 +719,22 @@
       void questionCard.offsetWidth;
       questionCard.classList.add('bounce-in');
       
-      questionCard.innerHTML = `<p id="question-text" class="text-2xl md:text-3xl text-center text-gray-700 font-bold">${escapeHtml(q.label)}</p>`;
+      // 移除按鈕，改為點擊文字即觸發發音
+      questionCard.innerHTML = `
+        <div class="flex flex-col items-center justify-center gap-3 w-full h-full cursor-pointer hover:bg-pink-50 rounded-2xl transition-colors" onclick="speakCurrentQuestion()">
+          <p id="question-text" class="text-3xl md:text-5xl text-center text-pink-600 font-bold">${escapeHtml(q.label)}</p>
+        </div>
+      `;
       
       renderOptionsUI('game', q);
       
       document.getElementById('next-btn').classList.add('hidden');
       document.getElementById('result-message').classList.add('hidden');
+      
+      // 如果設定開啟，顯示題目時自動朗讀
+      if (gameSettings.enableTTS) {
+        speakCurrentQuestion();
+      }
     }
 
     function selectOption(selectedIndex) {
@@ -711,18 +763,27 @@
         score++;
         document.getElementById('score').textContent = score;
         
+        // 播放答對音效
+        correctSound.currentTime = 0;
+        correctSound.play().catch(e => console.log('Audio play failed:', e));
+        
         resultMessage.textContent = '答對了~很棒';
         resultMessage.className = 'mt-6 text-2xl font-bold text-green-500 bounce-in h-10 flex items-center justify-center';
       } else {
-        resultMessage.textContent = '可惜～再試一次！💪';
+        // 播放答錯音效
+        wrongSound.currentTime = 0;
+        wrongSound.play().catch(e => console.log('Audio play failed:', e));
+        
+        resultMessage.textContent = '答錯了~好可惜!';
         resultMessage.className = 'mt-6 text-2xl font-bold text-red-500 wrong-shake h-10 flex items-center justify-center';
         
         const xMark = document.createElement('div');
         xMark.textContent = '✕';
-        xMark.className = 'absolute text-8xl font-bold text-red-500 pointer-events-none wrong-shake z-50';
-        xMark.style.left = '50%';
-        xMark.style.top = '45%';
-        document.getElementById('game-view').appendChild(xMark);
+        xMark.className = 'absolute inset-0 flex items-center justify-center text-8xl md:text-9xl font-bold text-red-500 pointer-events-none wrong-shake z-50 drop-shadow-lg';
+        
+        const selectedBtn = document.getElementById(`option-${selectedIndex}`);
+        selectedBtn.appendChild(xMark);
+        
         setTimeout(() => xMark.remove(), 600);
       }
       
@@ -753,16 +814,22 @@
       
       if (percentage === 100) {
         message = '🎊 完美！全部答對！你太厲害了！🌟';
+        correctSound.currentTime = 0;
+        correctSound.play().catch(e => console.log('Audio play failed:', e));
       } else if (percentage >= 80) {
         message = '🎉 太棒了！表現得很好！';
+        correctSound.currentTime = 0;
+        correctSound.play().catch(e => console.log('Audio play failed:', e));
       } else if (percentage >= 60) {
         message = '😊 不錯喔！繼續加油！';
       } else {
         message = '💪 沒關係，再試一次吧！';
       }
       
-      document.getElementById('question-text').textContent = `遊戲結束！\n得分：${score}/${generatedQuestions.length} (${percentage}%)\n${message}`;
+      document.getElementById('question-card').innerHTML = `<p id="question-text" class="text-xl md:text-2xl text-center text-gray-700 font-bold whitespace-pre-line">遊戲結束！\n得分：${score}/${generatedQuestions.length} (${percentage}%)\n${message}</p>`;
       
+      speakText(`遊戲結束！你的得分是 ${score}分。`);
+
       // 結束畫面一律顯示 2 個按鈕 (再玩一次 / 管理後台)
       const container = document.getElementById('options-container');
       container.className = `grid gap-4 md:gap-6 grid-cols-2 max-w-2xl mx-auto`;
