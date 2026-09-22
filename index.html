@@ -134,8 +134,9 @@
          <input type="text" id="setting-title" placeholder="例如：🌸 認識水果遊戲 🌸" class="w-full px-3 py-2 border-2 border-pink-200 rounded-lg focus:border-pink-400 focus:outline-none text-sm transition-colors">
         </div>
         <div>
-         <label class="block text-sm font-medium text-gray-600 mb-1">選項數量設定</label>
+         <label class="block text-sm font-medium text-gray-600 mb-1">選項數量與模式設定</label>
          <select id="setting-options-count" class="w-full px-3 py-2 border-2 border-pink-200 rounded-lg focus:border-pink-400 focus:outline-none text-sm transition-colors">
+          <option value="flashcard">👀 視覺圖示卡 (學習模式)</option>
           <option value="2">二選一 (2個選項)</option>
           <option value="3">三選一 (3個選項)</option>
           <option value="4">四選一 (4個選項)</option>
@@ -204,7 +205,11 @@
        <form id="add-form" onsubmit="addPairItem(event)" class="space-y-3">
         <div><label class="block text-sm font-medium text-gray-600 mb-1">標籤文字 (語音會唸出此文字)</label> <input type="text" id="new-label" placeholder="例：花" required class="w-full px-3 py-2 border-2 border-pink-200 rounded-lg focus:border-pink-400 focus:outline-none transition-colors">
         </div>
-        <div><label class="block text-sm font-medium text-gray-600 mb-1">配對圖片（JPG/PNG）</label> <input type="file" id="new-image" accept=".jpg,.jpeg,.png" onchange="previewImage(event, 'preview-img')" required class="w-full px-3 py-2 border-2 border-pink-200 rounded-lg text-sm transition-colors">
+        <div><label class="block text-sm font-medium text-gray-600 mb-1">配對圖片（上傳圖片 或 輸入 Emoji）</label> 
+         <div class="flex items-center gap-2">
+           <input type="file" id="new-image" accept=".jpg,.jpeg,.png" onchange="previewImage(event, 'preview-img')" class="w-full px-3 py-2 border-2 border-pink-200 rounded-lg text-sm transition-colors">
+           <button type="button" onclick="promptEmoji()" class="shrink-0 px-4 py-2 bg-amber-100 text-amber-700 font-bold rounded-lg hover:bg-amber-200 transition-colors shadow-sm text-sm">Emoji</button>
+         </div>
          <div id="preview-img" class="mt-2 max-w-20 max-h-20"></div>
         </div>
         <button type="submit" id="add-btn" class="w-full py-2 bg-gradient-to-r from-pink-400 to-pink-500 text-white rounded-lg font-bold hover:from-pink-500 hover:to-pink-600 transition-all"> ✨ 暫存項目 </button>
@@ -237,6 +242,7 @@
     // --- 1. 資料初始化與設定 ---
     let pairItems = JSON.parse(localStorage.getItem('pairItems')) || [];
     let tempPairItems = []; 
+    let tempGeneratedImage = null; 
     
     let gameSettings = JSON.parse(localStorage.getItem('gameSettings')) || {
       title: "🌸 2選1配對遊戲 🌸",
@@ -339,7 +345,6 @@
             if (!isAuto) {
                 showToast('❌ 取得清單失敗，請檢查帳號、儲存庫名稱。', 'error');
             } else {
-                // 如果自動抓取失敗，回退至手動模式
                 document.getElementById('autoGhImport').classList.add('hidden');
                 document.getElementById('autoGhImport').classList.remove('flex');
                 document.getElementById('manualGhImport').classList.remove('hidden');
@@ -453,6 +458,8 @@
     function openAdmin() {
       tempPairItems = JSON.parse(JSON.stringify(pairItems));
       tempGameSettings = { ...gameSettings };
+      tempGeneratedImage = null; // 重置預覽
+      document.getElementById('preview-img').innerHTML = '';
       
       document.getElementById('setting-title').value = tempGameSettings.title;
       document.getElementById('setting-options-count').value = tempGameSettings.optionCount;
@@ -468,14 +475,14 @@
     }
 
     function saveAdmin() {
+      const optVal = document.getElementById('setting-options-count').value;
       const newItemsStr = JSON.stringify(tempPairItems);
       const newSettingsStr = JSON.stringify({
         title: document.getElementById('setting-title').value || "🌸 配對遊戲 🌸",
-        optionCount: parseInt(document.getElementById('setting-options-count').value) || 2,
+        optionCount: optVal === 'flashcard' ? 'flashcard' : (parseInt(optVal) || 2),
         enableTTS: document.getElementById('setting-enable-tts').value === "true"
       });
 
-      // 防爆容量檢查機制
       if (saveToLocalStorage('pairItems', newItemsStr) && saveToLocalStorage('gameSettings', newSettingsStr)) {
         pairItems = JSON.parse(newItemsStr);
         gameSettings = JSON.parse(newSettingsStr);
@@ -549,7 +556,23 @@
       reader.readAsText(file);
     }
 
-    // 最佳化圖片壓縮
+    // --- SVG 與圖片處理功能 ---
+    function sampleSVG(emoji, bg) {
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><rect rx='24' ry='24' width='100%' height='100%' fill='${bg}'/><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-size='100'>${emoji}</text></svg>`;
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    }
+
+    function promptEmoji() {
+        const e = prompt('請輸入一個 Emoji (例如：🌸)：');
+        if (e) {
+            const colors = ['#ff7a7a', '#7ad3ff', '#ffd166', '#a1fc7a', '#fc7af1', '#ffb347', '#b39eb5'];
+            const bg = colors[Math.floor(Math.random() * colors.length)];
+            tempGeneratedImage = sampleSVG(e, bg);
+            document.getElementById('preview-img').innerHTML = `<img src="${tempGeneratedImage}" class="h-20 w-20 object-cover rounded shadow-sm">`;
+            document.getElementById('new-image').value = ''; // 清除使用者原本可能選擇的檔案
+        }
+    }
+
     async function compressImage(file, maxWidth = 300, maxHeight = 300, quality = 0.7) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -592,6 +615,22 @@
       });
     }
 
+    function previewImage(event, previewId) {
+      const file = event.target.files[0];
+      const previewDiv = document.getElementById(previewId);
+      tempGeneratedImage = null; // 切換回上傳圖片，重置 Emoji 狀態
+      
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          previewDiv.innerHTML = `<img src="${e.target.result}" class="h-20 w-20 object-cover rounded shadow-sm">`;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        previewDiv.innerHTML = '';
+      }
+    }
+
     async function addPairItem(event) {
       event.preventDefault();
       
@@ -601,20 +640,23 @@
       }
       
       const addBtn = document.getElementById('add-btn');
-      addBtn.disabled = true;
-      addBtn.textContent = '處理中...';
-      
       const imageFile = document.getElementById('new-image').files[0];
       
-      if (!imageFile) {
-        showToast('請選擇圖片', 'error');
-        addBtn.disabled = false;
-        addBtn.textContent = '✨ 暫存項目';
+      if (!imageFile && !tempGeneratedImage) {
+        showToast('請選擇圖片或輸入 Emoji', 'error');
         return;
       }
 
+      addBtn.disabled = true;
+      addBtn.textContent = '處理中...';
+
       try {
-        const imageBase64 = await compressImage(imageFile);
+        let imageBase64;
+        if (imageFile) {
+          imageBase64 = await compressImage(imageFile);
+        } else {
+          imageBase64 = tempGeneratedImage;
+        }
         
         const newItem = {
           __backendId: Date.now().toString(),
@@ -632,6 +674,7 @@
         
         document.getElementById('add-form').reset();
         document.getElementById('preview-img').innerHTML = '';
+        tempGeneratedImage = null;
         showToast('項目已暫存，請記得點擊下方「儲存設定」！');
         
       } catch (error) {
@@ -705,24 +748,23 @@
       return div.innerHTML;
     }
 
-    function previewImage(event, previewId) {
-      const file = event.target.files[0];
-      const previewDiv = document.getElementById(previewId);
-      
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          previewDiv.innerHTML = `<img src="${e.target.result}" class="h-20 w-20 object-cover rounded shadow-sm">`;
-        };
-        reader.readAsDataURL(file);
-      } else {
-        previewDiv.innerHTML = '';
-      }
-    }
-
     // --- 5. 遊戲進行邏輯 ---
     function generateQuestions() {
       generatedQuestions = [];
+      
+      // 處理「視覺圖示卡 (Flashcard)」模式：直接照順序顯示每一張圖卡
+      if (gameSettings.optionCount === 'flashcard') {
+        pairItems.forEach(item => {
+          generatedQuestions.push({
+            label: item.label,
+            image: item.image,
+            isFlashcard: true
+          });
+        });
+        return;
+      }
+
+      // 處理一般測驗模式 (2選1, 3選1, 4選1)
       const optsCount = gameSettings.optionCount;
       if (pairItems.length < optsCount) return;
 
@@ -750,6 +792,7 @@
     }
 
     function getGridClass(count) {
+      if (count === 'flashcard') return 'grid-cols-2 max-w-2xl mx-auto'; // 大廳畫面顯示2格
       if (count === 2) return 'grid-cols-2 max-w-2xl mx-auto';
       if (count === 3) return 'grid-cols-2 md:grid-cols-3 max-w-4xl mx-auto';
       if (count === 4) return 'grid-cols-2 md:grid-cols-4 max-w-4xl mx-auto';
@@ -758,7 +801,7 @@
 
     function renderOptionsUI(mode = 'menu', questionData = null) {
       const container = document.getElementById('options-container');
-      const count = gameSettings.optionCount;
+      const count = gameSettings.optionCount === 'flashcard' ? 2 : gameSettings.optionCount;
       container.className = `grid gap-4 md:gap-6 ${getGridClass(count)}`;
       container.innerHTML = '';
       
@@ -768,7 +811,6 @@
         const btn = document.createElement('button');
         btn.id = `option-${i}`;
         
-        // 加上 relative 以便精準定位 X
         btn.className = `option-card relative bg-gradient-to-br rounded-2xl p-4 border-4 shadow-md flex flex-col items-center justify-center min-h-32 md:min-h-48 ${optionStyles[i % optionStyles.length]}`;
         
         if (mode === 'menu') {
@@ -789,6 +831,14 @@
       document.getElementById('score').textContent = '0';
       document.getElementById('total').textContent = pairItems.length;
       
+      const scoreDisplay = document.getElementById('score-display');
+      if (gameSettings.optionCount === 'flashcard') {
+        scoreDisplay.classList.add('hidden');
+      } else {
+        scoreDisplay.classList.remove('hidden');
+      }
+
+      document.getElementById('question-card').classList.remove('hidden');
       document.getElementById('question-card').innerHTML = `<p id="question-text" class="text-xl md:text-2xl text-center text-gray-700 font-medium">點擊下方開始遊戲！</p>`;
       
       renderOptionsUI('menu');
@@ -800,14 +850,26 @@
     }
 
     function startGame() {
-      const neededItems = gameSettings.optionCount;
-      if (pairItems.length < neededItems) {
-        showToast(`請先去「管理後台」至少新增或匯入 ${neededItems} 個配對項目！`, 'error');
-        return;
+      if (gameSettings.optionCount !== 'flashcard') {
+        const neededItems = gameSettings.optionCount;
+        if (pairItems.length < neededItems) {
+          showToast(`請先去「管理後台」至少新增或匯入 ${neededItems} 個配對項目！`, 'error');
+          return;
+        }
+      } else {
+        if (pairItems.length < 1) {
+          showToast(`請先去「管理後台」新增至少 1 個配對項目！`, 'error');
+          return;
+        }
       }
       
       generateQuestions();
-      generatedQuestions = generatedQuestions.sort(() => Math.random() - 0.5);
+      
+      // 如果不是視覺圖卡模式，就將題目洗牌打亂
+      if (gameSettings.optionCount !== 'flashcard') {
+        generatedQuestions = generatedQuestions.sort(() => Math.random() - 0.5);
+      }
+
       currentQuestionIndex = 0;
       score = 0;
       gameStarted = true;
@@ -819,28 +881,64 @@
       document.getElementById('result-message').classList.add('hidden');
       document.getElementById('next-btn').classList.add('hidden');
       
+      const scoreDisplay = document.getElementById('score-display');
+      if (gameSettings.optionCount === 'flashcard') {
+        scoreDisplay.classList.add('hidden');
+      } else {
+        scoreDisplay.classList.remove('hidden');
+      }
+
       showQuestion();
     }
 
     function showQuestion() {
       const q = generatedQuestions[currentQuestionIndex];
       const questionCard = document.getElementById('question-card');
+      const optionsContainer = document.getElementById('options-container');
       
       questionCard.classList.remove('bounce-in');
       void questionCard.offsetWidth;
       questionCard.classList.add('bounce-in');
-      
-      // 點擊文字即觸發發音，並提供視覺互動提示
-      questionCard.innerHTML = `
-        <div class="flex flex-col items-center justify-center gap-3 w-full h-full cursor-pointer hover:bg-pink-50 rounded-2xl transition-colors" onclick="speakCurrentQuestion()">
-          <p id="question-text" class="text-3xl md:text-5xl text-center text-pink-600 font-bold drop-shadow-sm select-none">${escapeHtml(q.label)}</p>
-        </div>
-      `;
-      
-      renderOptionsUI('game', q);
-      
-      document.getElementById('next-btn').classList.add('hidden');
-      document.getElementById('result-message').classList.add('hidden');
+
+      // 判斷是否為圖示卡學習模式
+      if (gameSettings.optionCount === 'flashcard') {
+        // 隱藏原本的題目區塊，直接將圖卡置中放大
+        questionCard.classList.add('hidden');
+        
+        optionsContainer.className = 'flex justify-center items-center w-full mt-4';
+        optionsContainer.innerHTML = `
+          <div class="option-card bg-gradient-to-br from-yellow-50 to-yellow-100 border-4 border-yellow-300 rounded-[2rem] p-8 shadow-xl flex flex-col items-center justify-center w-full max-w-sm cursor-pointer hover:border-yellow-400 hover:scale-105 transition-transform duration-300 bounce-in" onclick="speakCurrentQuestion()">
+            <img src="${q.image}" class="w-full h-48 md:h-64 object-contain rounded-xl drop-shadow-md pointer-events-none mb-6">
+            <span class="text-4xl md:text-5xl font-extrabold text-gray-800 pointer-events-none tracking-wide text-center">${escapeHtml(q.label)}</span>
+          </div>
+        `;
+        
+        document.getElementById('next-btn').classList.remove('hidden');
+        document.getElementById('result-message').classList.add('hidden');
+        
+        const nextBtn = document.getElementById('next-btn');
+        if (currentQuestionIndex < generatedQuestions.length - 1) {
+          nextBtn.textContent = '➡️ 下一張';
+          nextBtn.onclick = nextQuestion;
+        } else {
+          nextBtn.textContent = '🏆 完成學習';
+          nextBtn.onclick = endGame;
+        }
+
+      } else {
+        // 一般測驗模式
+        questionCard.classList.remove('hidden');
+        questionCard.innerHTML = `
+          <div class="flex flex-col items-center justify-center gap-3 w-full h-full cursor-pointer hover:bg-pink-50 rounded-2xl transition-colors" onclick="speakCurrentQuestion()">
+            <p id="question-text" class="text-3xl md:text-5xl text-center text-pink-600 font-bold drop-shadow-sm select-none">${escapeHtml(q.label)}</p>
+          </div>
+        `;
+        
+        renderOptionsUI('game', q);
+        
+        document.getElementById('next-btn').classList.add('hidden');
+        document.getElementById('result-message').classList.add('hidden');
+      }
       
       // 如果設定開啟，顯示題目時自動朗讀
       if (gameSettings.enableTTS) speakCurrentQuestion();
@@ -853,7 +951,6 @@
       const resultMessage = document.getElementById('result-message');
       const isCorrect = (selectedIndex === q.correctAnswerIndex);
       
-      // 鎖定所有選項並更新顏色反饋
       for(let i = 0; i < gameSettings.optionCount; i++) {
         const btn = document.getElementById(`option-${i}`);
         btn.disabled = true;
@@ -880,7 +977,6 @@
         resultMessage.textContent = '答錯了~好可惜!';
         resultMessage.className = 'mt-6 text-2xl font-bold text-red-500 wrong-shake h-10 flex items-center justify-center';
         
-        // 將 X 標記準確疊加在錯誤按鈕之上
         const xMark = document.createElement('div');
         xMark.textContent = '✕';
         xMark.className = 'absolute inset-0 flex items-center justify-center text-8xl md:text-9xl font-bold text-red-500 pointer-events-none wrong-shake z-50 drop-shadow-lg';
@@ -911,26 +1007,33 @@
 
     function endGame() {
       gameStarted = false;
-      
-      const percentage = Math.round((score / generatedQuestions.length) * 100);
-      let message = '';
-      
-      if (percentage === 100) {
-        message = '🎊 完美！全部答對！你太厲害了！🌟';
-        playAudio(correctSound);
-      } else if (percentage >= 80) {
-        message = '🎉 太棒了！表現得很好！';
-        playAudio(correctSound);
-      } else if (percentage >= 60) {
-        message = '😊 不錯喔！繼續加油！';
-      } else {
-        message = '💪 沒關係，再試一次吧！';
-      }
-      
-      document.getElementById('question-card').innerHTML = `<p id="question-text" class="text-xl md:text-2xl text-center text-gray-700 font-bold whitespace-pre-line">遊戲結束！\n得分：${score}/${generatedQuestions.length} (${percentage}%)\n${message}</p>`;
-      speakText(`遊戲結束！你的得分是 ${score}分。`);
+      const questionCard = document.getElementById('question-card');
+      questionCard.classList.remove('hidden');
 
-      // 結束畫面顯示 2 個按鈕 (再玩一次 / 管理後台)
+      if (gameSettings.optionCount === 'flashcard') {
+        questionCard.innerHTML = `<p id="question-text" class="text-2xl md:text-4xl text-center text-green-600 font-bold whitespace-pre-line py-4">🎉 學習完成！\n你已經認識了所有的圖卡囉！🌟</p>`;
+        speakText(`學習完成！你已經認識所有的圖卡囉。`);
+        playAudio(correctSound);
+      } else {
+        const percentage = Math.round((score / generatedQuestions.length) * 100);
+        let message = '';
+        
+        if (percentage === 100) {
+          message = '🎊 完美！全部答對！你太厲害了！🌟';
+          playAudio(correctSound);
+        } else if (percentage >= 80) {
+          message = '🎉 太棒了！表現得很好！';
+          playAudio(correctSound);
+        } else if (percentage >= 60) {
+          message = '😊 不錯喔！繼續加油！';
+        } else {
+          message = '💪 沒關係，再試一次吧！';
+        }
+        
+        questionCard.innerHTML = `<p id="question-text" class="text-xl md:text-2xl text-center text-gray-700 font-bold whitespace-pre-line">遊戲結束！\n得分：${score}/${generatedQuestions.length} (${percentage}%)\n${message}</p>`;
+        speakText(`遊戲結束！你的得分是 ${score}分。`);
+      }
+
       const container = document.getElementById('options-container');
       container.className = `grid gap-4 md:gap-6 grid-cols-2 max-w-2xl mx-auto`;
       container.innerHTML = '';
