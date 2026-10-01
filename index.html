@@ -2,12 +2,22 @@
 <html lang="zh-TW" class="h-full">
  <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>配對遊戲</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     * { font-family: 'Zen Maru Gothic', sans-serif; }
+    
+    /* 關鍵修復 1：徹底禁用預設觸控行為，解決大屏點擊延遲與雙擊縮放問題 */
+    html, body {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button {
+      touch-action: manipulation; /* 確保按鈕能立即反應觸控 */
+    }
     
     @keyframes float {
       0%, 100% { transform: translateY(0px); }
@@ -52,6 +62,9 @@
     
     .option-card {
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      /* 關鍵修復 2：避免圖卡內部元素干擾點擊 */
+      user-select: none;
+      -webkit-user-select: none;
     }
     .option-card:hover:not(:disabled) {
       transform: translateY(-8px) scale(1.02);
@@ -70,11 +83,17 @@
       background: white;
       border-radius: 50%;
       opacity: 0.6;
+      pointer-events: none; /* 裝飾物不阻擋點擊 */
     }
     
     .admin-panel {
       backdrop-filter: blur(10px);
       background: rgba(255, 255, 255, 0.95);
+    }
+
+    /* 關鍵修復 3：確保上層動畫圖層不會阻擋下層點擊 */
+    .pointer-events-none {
+      pointer-events: none !important;
     }
   </style>
  </head>
@@ -108,7 +127,7 @@
     <div id="result-message" class="mt-6 text-2xl font-bold hidden h-10 flex items-center justify-center"></div>
     
     <!-- 遊戲控制按鈕 -->
-    <div class="mt-6 flex gap-4 flex-wrap justify-center">
+    <div class="mt-6 flex gap-4 flex-wrap justify-center relative z-10">
      <button id="start-btn" onclick="startGame()" class="px-6 py-3 bg-gradient-to-r from-pink-400 to-pink-500 text-white rounded-full font-bold shadow-lg hover:from-pink-500 hover:to-pink-600 transition-all hover:scale-105"> 🎮 開始遊戲 </button> 
      <button id="restart-btn" onclick="resetToMenu()" class="px-6 py-3 bg-gradient-to-r from-orange-400 to-orange-500 text-white rounded-full font-bold shadow-lg hover:from-orange-500 hover:to-orange-600 transition-all hover:scale-105 hidden"> 🔄 重新開始 </button> 
      <button id="next-btn" onclick="nextQuestion()" class="px-8 py-3 bg-gradient-to-r from-purple-400 to-purple-500 text-white rounded-full font-bold shadow-lg hover:from-purple-500 hover:to-purple-600 transition-all hover:scale-105 pulse-soft hidden"> ➡️ 下一題 </button> 
@@ -123,7 +142,7 @@
      <div class="p-6 flex-grow">
       <div class="flex items-center justify-between mb-6">
        <h2 class="text-2xl font-bold text-pink-600">🎀 管理後台</h2>
-       <button onclick="closeAdmin()" class="text-3xl text-gray-400 hover:text-gray-600 transition-colors">×</button>
+       <button onclick="closeAdmin()" class="text-3xl text-gray-400 hover:text-gray-600 transition-colors p-2">×</button>
       </div>
 
       <div class="bg-white rounded-2xl p-4 mb-6 border-2 border-pink-200 shadow-sm">
@@ -219,7 +238,7 @@
       <div class="bg-white rounded-2xl p-4 border-2 border-pink-200 shadow-sm">
        <div class="flex justify-between items-center mb-3">
          <h3 class="font-bold text-pink-600">📋 待儲存項目 (<span id="item-count">0</span>項)</h3>
-         <button onclick="clearTempItems()" class="text-xs px-2 py-1 bg-gray-200 text-gray-600 rounded hover:bg-gray-300 transition-colors font-medium">清空項目</button>
+         <button onclick="clearTempItems()" class="text-xs px-2 py-1 bg-gray-200 text-gray-600 rounded hover:bg-gray-300 transition-colors font-medium p-2">清空項目</button>
        </div>
        <div id="item-list" class="space-y-3 max-h-80 overflow-y-auto p-1">
         <p class="text-gray-400 text-center py-4">目前沒有項目，請新增項目開始！</p>
@@ -569,7 +588,7 @@
             const bg = colors[Math.floor(Math.random() * colors.length)];
             tempGeneratedImage = sampleSVG(e, bg);
             document.getElementById('preview-img').innerHTML = `<img src="${tempGeneratedImage}" class="h-20 w-20 object-cover rounded shadow-sm">`;
-            document.getElementById('new-image').value = ''; // 清除使用者原本可能選擇的檔案
+            document.getElementById('new-image').value = ''; 
         }
     }
 
@@ -618,7 +637,7 @@
     function previewImage(event, previewId) {
       const file = event.target.files[0];
       const previewDiv = document.getElementById(previewId);
-      tempGeneratedImage = null; // 切換回上傳圖片，重置 Emoji 狀態
+      tempGeneratedImage = null; 
       
       if (file) {
         const reader = new FileReader();
@@ -726,11 +745,11 @@
               <span class="text-pink-600 font-bold">#${index + 1}</span>
               ${isConfirming ? `
                 <div class="flex gap-1">
-                  <button onclick="deletePairItem('${item.__backendId}')" class="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 shadow transition-colors">確定刪除</button>
-                  <button onclick="cancelDelete()" class="px-2 py-1 bg-gray-400 text-white text-xs rounded hover:bg-gray-500 shadow transition-colors">取消</button>
+                  <button onclick="deletePairItem('${item.__backendId}')" class="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 shadow transition-colors p-2">確定刪除</button>
+                  <button onclick="cancelDelete()" class="px-2 py-1 bg-gray-400 text-white text-xs rounded hover:bg-gray-500 shadow transition-colors p-2">取消</button>
                 </div>
               ` : `
-                <button onclick="deletePairItem('${item.__backendId}')" class="text-red-400 hover:text-red-600 text-sm font-bold transition-colors">🗑️ 刪除</button>
+                <button onclick="deletePairItem('${item.__backendId}')" class="text-red-400 hover:text-red-600 text-sm font-bold transition-colors p-2">🗑️ 刪除</button>
               `}
             </div>
             <div class="flex gap-2 items-center">
@@ -752,7 +771,6 @@
     function generateQuestions() {
       generatedQuestions = [];
       
-      // 處理「視覺圖示卡 (Flashcard)」模式：直接照順序顯示每一張圖卡
       if (gameSettings.optionCount === 'flashcard') {
         pairItems.forEach(item => {
           generatedQuestions.push({
@@ -764,7 +782,6 @@
         return;
       }
 
-      // 處理一般測驗模式 (2選1, 3選1, 4選1)
       const optsCount = gameSettings.optionCount;
       if (pairItems.length < optsCount) return;
 
@@ -792,7 +809,7 @@
     }
 
     function getGridClass(count) {
-      if (count === 'flashcard') return 'grid-cols-2 max-w-2xl mx-auto'; // 大廳畫面顯示2格
+      if (count === 'flashcard') return 'grid-cols-2 max-w-2xl mx-auto'; 
       if (count === 2) return 'grid-cols-2 max-w-2xl mx-auto';
       if (count === 3) return 'grid-cols-2 md:grid-cols-3 max-w-4xl mx-auto';
       if (count === 4) return 'grid-cols-2 md:grid-cols-4 max-w-4xl mx-auto';
@@ -814,12 +831,16 @@
         btn.className = `option-card relative bg-gradient-to-br rounded-2xl p-4 border-4 shadow-md flex flex-col items-center justify-center min-h-32 md:min-h-48 ${optionStyles[i % optionStyles.length]}`;
         
         if (mode === 'menu') {
-          btn.innerHTML = `<span class="text-5xl">${emojis[i % emojis.length]}</span>`;
+          btn.innerHTML = `<span class="text-5xl pointer-events-none">${emojis[i % emojis.length]}</span>`;
           btn.disabled = true;
           btn.classList.remove('hover:scale-102'); 
         } else if (mode === 'game' && questionData) {
           btn.innerHTML = `<img src="${questionData.options[i].image}" class="w-full h-32 md:h-48 object-contain rounded-lg drop-shadow-sm pointer-events-none">`;
-          btn.onclick = () => selectOption(i);
+          // 關鍵修復 4：直接將點擊事件綁定給按鈕，並確保它不會被其他事件攔截
+          btn.onclick = (e) => {
+            e.preventDefault();
+            selectOption(i);
+          };
         }
         
         container.appendChild(btn);
@@ -865,7 +886,6 @@
       
       generateQuestions();
       
-      // 如果不是視覺圖卡模式，就將題目洗牌打亂
       if (gameSettings.optionCount !== 'flashcard') {
         generatedQuestions = generatedQuestions.sort(() => Math.random() - 0.5);
       }
@@ -900,17 +920,15 @@
       void questionCard.offsetWidth;
       questionCard.classList.add('bounce-in');
 
-      // 判斷是否為圖示卡學習模式
       if (gameSettings.optionCount === 'flashcard') {
-        // 隱藏原本的題目區塊，直接將圖卡置中放大
         questionCard.classList.add('hidden');
         
         optionsContainer.className = 'flex justify-center items-center w-full mt-4';
         optionsContainer.innerHTML = `
-          <div class="option-card bg-gradient-to-br from-yellow-50 to-yellow-100 border-4 border-yellow-300 rounded-[2rem] p-8 shadow-xl flex flex-col items-center justify-center w-full max-w-sm cursor-pointer hover:border-yellow-400 hover:scale-105 transition-transform duration-300 bounce-in" onclick="speakCurrentQuestion()">
+          <button class="option-card bg-gradient-to-br from-yellow-50 to-yellow-100 border-4 border-yellow-300 rounded-[2rem] p-8 shadow-xl flex flex-col items-center justify-center w-full max-w-sm cursor-pointer hover:border-yellow-400 hover:scale-105 transition-transform duration-300 bounce-in" onclick="speakCurrentQuestion()">
             <img src="${q.image}" class="w-full h-48 md:h-64 object-contain rounded-xl drop-shadow-md pointer-events-none mb-6">
             <span class="text-4xl md:text-5xl font-extrabold text-gray-800 pointer-events-none tracking-wide text-center">${escapeHtml(q.label)}</span>
-          </div>
+          </button>
         `;
         
         document.getElementById('next-btn').classList.remove('hidden');
@@ -926,12 +944,11 @@
         }
 
       } else {
-        // 一般測驗模式
         questionCard.classList.remove('hidden');
         questionCard.innerHTML = `
-          <div class="flex flex-col items-center justify-center gap-3 w-full h-full cursor-pointer hover:bg-pink-50 rounded-2xl transition-colors" onclick="speakCurrentQuestion()">
-            <p id="question-text" class="text-3xl md:text-5xl text-center text-pink-600 font-bold drop-shadow-sm select-none">${escapeHtml(q.label)}</p>
-          </div>
+          <button class="flex flex-col items-center justify-center gap-3 w-full h-full cursor-pointer hover:bg-pink-50 rounded-2xl transition-colors p-2" onclick="speakCurrentQuestion()">
+            <p id="question-text" class="text-3xl md:text-5xl text-center text-pink-600 font-bold drop-shadow-sm pointer-events-none">${escapeHtml(q.label)}</p>
+          </button>
         `;
         
         renderOptionsUI('game', q);
@@ -940,7 +957,6 @@
         document.getElementById('result-message').classList.add('hidden');
       }
       
-      // 如果設定開啟，顯示題目時自動朗讀
       if (gameSettings.enableTTS) speakCurrentQuestion();
     }
 
@@ -1011,7 +1027,7 @@
       questionCard.classList.remove('hidden');
 
       if (gameSettings.optionCount === 'flashcard') {
-        questionCard.innerHTML = `<p id="question-text" class="text-2xl md:text-4xl text-center text-green-600 font-bold whitespace-pre-line py-4">🎉 學習完成！\n你已經認識了所有的圖卡囉！🌟</p>`;
+        questionCard.innerHTML = `<p id="question-text" class="text-2xl md:text-4xl text-center text-green-600 font-bold whitespace-pre-line py-4 pointer-events-none">🎉 學習完成！\n你已經認識了所有的圖卡囉！🌟</p>`;
         speakText(`學習完成！你已經認識所有的圖卡囉。`);
         playAudio(correctSound);
       } else {
@@ -1030,7 +1046,7 @@
           message = '💪 沒關係，再試一次吧！';
         }
         
-        questionCard.innerHTML = `<p id="question-text" class="text-xl md:text-2xl text-center text-gray-700 font-bold whitespace-pre-line">遊戲結束！\n得分：${score}/${generatedQuestions.length} (${percentage}%)\n${message}</p>`;
+        questionCard.innerHTML = `<p id="question-text" class="text-xl md:text-2xl text-center text-gray-700 font-bold whitespace-pre-line pointer-events-none">遊戲結束！\n得分：${score}/${generatedQuestions.length} (${percentage}%)\n${message}</p>`;
         speakText(`遊戲結束！你的得分是 ${score}分。`);
       }
 
@@ -1040,12 +1056,12 @@
       
       const btnRestart = document.createElement('button');
       btnRestart.className = `option-card bg-gradient-to-br rounded-2xl p-4 border-4 shadow-md flex flex-col items-center justify-center min-h-32 md:min-h-48 ${optionStyles[0]}`;
-      btnRestart.innerHTML = '<span class="text-5xl">🔄</span><span class="mt-4 font-bold text-xl text-gray-700">再玩一次</span>';
+      btnRestart.innerHTML = '<span class="text-5xl pointer-events-none">🔄</span><span class="mt-4 font-bold text-xl text-gray-700 pointer-events-none">再玩一次</span>';
       btnRestart.onclick = startGame;
 
       const btnAdmin = document.createElement('button');
       btnAdmin.className = `option-card bg-gradient-to-br rounded-2xl p-4 border-4 shadow-md flex flex-col items-center justify-center min-h-32 md:min-h-48 ${optionStyles[1]}`;
-      btnAdmin.innerHTML = '<span class="text-5xl">⚙️</span><span class="mt-4 font-bold text-xl text-gray-700">管理後台</span>';
+      btnAdmin.innerHTML = '<span class="text-5xl pointer-events-none">⚙️</span><span class="mt-4 font-bold text-xl text-gray-700 pointer-events-none">管理後台</span>';
       btnAdmin.onclick = openAdmin;
 
       container.appendChild(btnRestart);
@@ -1056,7 +1072,6 @@
       document.getElementById('result-message').classList.add('hidden');
     }
 
-    // 初始化啟動
     init();
   </script>
  </body>
