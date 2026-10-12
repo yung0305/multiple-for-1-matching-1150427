@@ -41,16 +41,10 @@
       50% { transform: translateX(15px) rotate(15deg) scale(1.1); }
       75% { transform: translateX(-15px) rotate(-15deg) scale(1.1); }
     }
-
-    @keyframes pulse-soft {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-    }
     
     .float-animation { animation: float 3s ease-in-out infinite; }
     .bounce-in { animation: bounce-in 0.5s ease-out forwards; }
     .wrong-shake { animation: wrong-shake 0.6s ease-in-out forwards; }
-    .pulse-soft { animation: pulse-soft 2s infinite ease-in-out; }
     
     .sparkle::before, .sparkle::after {
       content: '✨';
@@ -62,7 +56,6 @@
     
     .option-card {
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      /* 關鍵修復 2：避免圖卡內部元素干擾點擊 */
       user-select: none;
       -webkit-user-select: none;
     }
@@ -91,7 +84,6 @@
       background: rgba(255, 255, 255, 0.95);
     }
 
-    /* 關鍵修復 3：確保上層動畫圖層不會阻擋下層點擊 */
     .pointer-events-none {
       pointer-events: none !important;
     }
@@ -130,7 +122,8 @@
     <div class="mt-6 flex gap-4 flex-wrap justify-center relative z-10">
      <button id="start-btn" onclick="startGame()" class="px-6 py-3 bg-gradient-to-r from-pink-400 to-pink-500 text-white rounded-full font-bold shadow-lg hover:from-pink-500 hover:to-pink-600 transition-all hover:scale-105"> 🎮 開始遊戲 </button> 
      <button id="restart-btn" onclick="resetToMenu()" class="px-6 py-3 bg-gradient-to-r from-orange-400 to-orange-500 text-white rounded-full font-bold shadow-lg hover:from-orange-500 hover:to-orange-600 transition-all hover:scale-105 hidden"> 🔄 重新開始 </button> 
-     <button id="next-btn" onclick="nextQuestion()" class="px-8 py-3 bg-gradient-to-r from-purple-400 to-purple-500 text-white rounded-full font-bold shadow-lg hover:from-purple-500 hover:to-purple-600 transition-all hover:scale-105 pulse-soft hidden"> ➡️ 下一題 </button> 
+     <!-- 移除了容易造成誤判的動畫 pulse-soft -->
+     <button id="next-btn" class="px-8 py-3 bg-gradient-to-r from-purple-400 to-purple-500 text-white rounded-full font-bold shadow-lg hover:from-purple-500 hover:to-purple-600 transition-all hover:scale-105 hidden"> ➡️ 下一題 </button> 
      <button onclick="openAdmin()" class="px-6 py-3 bg-gradient-to-r from-gray-400 to-gray-500 text-white rounded-full font-bold shadow-lg hover:from-gray-500 hover:to-gray-600 transition-all hover:scale-105"> ⚙️ 管理後台 </button>
     </div>
    </div>
@@ -191,7 +184,7 @@
                </div>
            </div>
 
-           <!-- 手動輸入區 (一般環境或本機使用) -->
+           <!-- 手掌握入區 (一般環境或本機使用) -->
            <div id="manualGhImport" class="hidden flex-col gap-2">
                <div class="text-xs font-bold text-gray-500 mb-1">一般環境：請手動輸入 GitHub 帳號與儲存庫</div>
                <div class="flex items-center gap-1">
@@ -836,7 +829,8 @@
           btn.classList.remove('hover:scale-102'); 
         } else if (mode === 'game' && questionData) {
           btn.innerHTML = `<img src="${questionData.options[i].image}" class="w-full h-32 md:h-48 object-contain rounded-lg drop-shadow-sm pointer-events-none">`;
-          // 關鍵修復 4：直接將點擊事件綁定給按鈕，並確保它不會被其他事件攔截
+          
+          /* 關鍵修復 4：加強綁定按鈕點擊攔截，確保所有平台都立即反應 */
           btn.onclick = (e) => {
             e.preventDefault();
             selectOption(i);
@@ -937,10 +931,10 @@
         const nextBtn = document.getElementById('next-btn');
         if (currentQuestionIndex < generatedQuestions.length - 1) {
           nextBtn.textContent = '➡️ 下一張';
-          nextBtn.onclick = nextQuestion;
+          nextBtn.onclick = (e) => { e.preventDefault(); nextQuestion(); };
         } else {
           nextBtn.textContent = '🏆 完成學習';
-          nextBtn.onclick = endGame;
+          nextBtn.onclick = (e) => { e.preventDefault(); endGame(); };
         }
 
       } else {
@@ -1009,10 +1003,11 @@
       
       if (currentQuestionIndex < generatedQuestions.length - 1) {
         nextBtn.textContent = '➡️ 下一題';
-        nextBtn.onclick = nextQuestion;
+        /* 關鍵修復 5：按鈕產生時就綁定強制的攔截事件 */
+        nextBtn.onclick = (e) => { e.preventDefault(); nextQuestion(); };
       } else {
         nextBtn.textContent = '🏆 查看結果';
-        nextBtn.onclick = endGame;
+        nextBtn.onclick = (e) => { e.preventDefault(); endGame(); };
       }
     }
 
@@ -1072,6 +1067,7 @@
       document.getElementById('result-message').classList.add('hidden');
     }
 
+    // 初始化啟動
     init();
   </script>
  </body>
